@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
@@ -71,3 +72,7 @@ export default defineConfig([
   },
 ])
 ```
+=======
+# health-tech
+Our HealthTech platform is an AI-powered system that promotes proactive healthcare through real-time monitoring and predictive insights.
+>>>>>>> 25d42f6ddd8d743186ebf5648d50be6943dd32aa
