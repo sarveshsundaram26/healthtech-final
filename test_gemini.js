@@ -1,6 +1,22 @@
-const fetch = require('node-fetch');
+import fs from 'fs';
+import path from 'path';
 
-const API_KEY = 'AIzaSyDaimTSkAOts9mfLS7OD0imVhqlMol5Nr44';
+// Parse .env manually to ensure we get the latest key without caching issues
+const envPath = path.resolve(process.cwd(), '.env');
+let API_KEY = '';
+
+try {
+  const envContent = fs.readFileSync(envPath, 'utf-8');
+  const match = envContent.match(/VITE_GEMINI_API_KEY=(.*)/);
+  if (match && match[1]) {
+    API_KEY = match[1].trim();
+  }
+} catch (e) {
+  console.error("Could not read .env file");
+}
+
+console.log(`Using API Key: ${API_KEY ? API_KEY.substring(0, 10) + '...' : 'NOT FOUND'}`);
+
 const VERSIONS = ['v1', 'v1beta'];
 
 async function testModels(version) {
@@ -9,12 +25,15 @@ async function testModels(version) {
     const res = await fetch(`https://generativelanguage.googleapis.com/${version}/models?key=${API_KEY}`);
     const data = await res.json();
     if (data.models) {
-      console.log(`Available models (${version}):`, data.models.map(m => m.name));
+      console.log(`Available models (${version}):`, data.models.map(m => m.name).slice(0, 3)); // Show first 3
+      return true;
     } else {
       console.error(`Error listing models (${version}):`, JSON.stringify(data, null, 2));
+      return false;
     }
   } catch (err) {
     console.error(`Fetch error (${version}):`, err.message);
+    return false;
   }
 }
 
@@ -31,23 +50,33 @@ async function testChat(version, model) {
     const data = await res.json();
     if (data.candidates) {
       console.log(`SUCCESS (${version}/${model}):`, data.candidates[0].content.parts[0].text);
+      return true;
     } else {
       console.error(`FAILURE (${version}/${model}):`, JSON.stringify(data, null, 2));
+      return false;
     }
   } catch (err) {
     console.error(`Fetch error (${version}/${model}):`, err.message);
+    return false;
   }
 }
 
 async function runTests() {
-  await testModels('v1');
+  if (!API_KEY) {
+    console.error("Checking failed: API Key not found.");
+    process.exit(1);
+  }
+
+  // Check available models first to debug 404
   await testModels('v1beta');
   
-  // Try common models
-  const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
-  for (const model of modelsToTry) {
-     await testChat('v1', model);
-     await testChat('v1beta', model);
+  // Just test the one we care about for speed
+  const success = await testChat('v1beta', 'gemini-2.5-flash');
+  if (success) {
+      console.log("\n>>> VERIFICATION PASSED: API Key is valid and gemini-2.5-flash is working. <<<");
+  } else {
+      console.log("\n>>> VERIFICATION FAILED: Could not connect with the provided key. <<<");
+      process.exit(1);
   }
 }
 

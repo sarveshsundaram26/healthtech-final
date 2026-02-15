@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, Activity, MessageSquare, AlertCircle, User as UserIcon, Bell, LogOut, Menu, X, Globe } from 'lucide-react';
@@ -21,7 +21,8 @@ interface SidebarContentProps {
   setLanguage: (lang: Language) => void;
 }
 
-const SidebarContent = ({ user, role, navigation, pathname, signOut, onClose, navigate, language, setLanguage }: SidebarContentProps) => (
+const SidebarContent = memo(({ user, role, navigation, pathname, signOut, onClose, navigate, language, setLanguage }: SidebarContentProps) => (
+  // ... existing JSX
   <div className="flex flex-col h-full pt-8 bg-[#1e293b] md:bg-[#1e293b]/50 backdrop-blur-xl border-r border-white/5 overflow-y-auto">
     <div className="flex items-center flex-shrink-0 px-6 mb-8 group cursor-pointer">
        <div className="h-10 w-10 bg-gradient-to-br from-blue-500 to-teal-400 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-blue-500/20 transition-all mr-3">
@@ -119,7 +120,7 @@ const SidebarContent = ({ user, role, navigation, pathname, signOut, onClose, na
       </div>
     </div>
   </div>
-);
+));
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { signOut, user, role } = useAuth();
@@ -128,7 +129,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const navigation = [
+  const navigation = useMemo(() => [
     { 
       name: t('dashboard') || 'Dashboard', 
       href: (role === 'doctor' || role === 'caretaker') ? '/dashboard/caretaker' : role === 'admin' ? '/admin' : '/dashboard/patient', 
@@ -147,7 +148,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     // General Features
     { name: t('my_profile') || 'My Profile', href: '/profile', icon: UserIcon },
-  ];
+  ], [t, role]);
 
   return (
     <div className="flex h-screen bg-[#0f172a] text-slate-200 overflow-hidden font-inter relative">

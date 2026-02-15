@@ -19,7 +19,7 @@ export interface UserContext {
 }
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 export const sendMessage = async (text: string, context?: UserContext): Promise<ChatMessage> => {
   if (!GEMINI_API_KEY) {
@@ -74,7 +74,28 @@ export const sendMessage = async (text: string, context?: UserContext): Promise<
       throw new Error(data.error?.message || `API Error: ${response.status}`);
     }
 
-    const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "I apologize, I'm having trouble processing that right now.";
+    let aiResponse = "";
+    
+    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+      aiResponse = data.candidates[0].content.parts[0].text;
+    } else {
+      // Check for safety block or other reason
+      const finishReason = data.candidates?.[0]?.finishReason;
+      const safetyRatings = data.candidates?.[0]?.safetyRatings;
+      const promptFeedback = data.promptFeedback;
+
+      console.error('[Gemini] No content generated.', { finishReason, safetyRatings, promptFeedback });
+
+      if (promptFeedback?.blockReason) {
+         throw new Error(`AI blocked config: ${promptFeedback.blockReason}`);
+      }
+      
+      if (finishReason) {
+         throw new Error(`AI generation stopped: ${finishReason}`);
+      }
+
+      throw new Error("AI returned an empty response without clear error details.");
+    }
 
     // Improved action detection logic (case-insensitive whole word or specific phrases)
     const actions: { label: string; action: string }[] = [];
@@ -99,9 +120,25 @@ export const sendMessage = async (text: string, context?: UserContext): Promise<
     };
   } catch (error: any) {
     console.error('[Gemini] Fetch Error:', error);
+    
+    // Check for rate limit or quota exceeded
+    const isRateLimit = error.message?.includes('429') || 
+                        error.message?.toLowerCase().includes('quota') ||
+                        error.message?.toLowerCase().includes('too many requests');
+
+    if (isRateLimit) {
+      return {
+        id: Date.now().toString(),
+        text: "I'm currently receiving too many requests. Please try again in a few moments. (Using cached/mock data for now)",
+        sender: 'ai',
+        timestamp: new Date(),
+      };
+    }
+
+    // For other errors, return the actual error
     return {
       id: Date.now().toString(),
-      text: `Sorry, I'm having trouble connecting to my health database right now. Please try again in a moment.`,
+      text: `Connection Error: ${error.message || 'Unknown error occurred'}. Please check your internet or API key.`,
       sender: 'ai',
       timestamp: new Date(),
     };

@@ -37,7 +37,7 @@ export default function VitalsChart({ data, selectedVital = 'all', selectedRecor
   };
 
   const CustomDot = (props: any) => {
-    const { cx, cy, payload, dataKey, stroke } = props;
+    const { cx, cy, payload, dataKey: _dataKey, stroke } = props;
     const isSelected = payload.isSelected;
     
     if (isSelected) {

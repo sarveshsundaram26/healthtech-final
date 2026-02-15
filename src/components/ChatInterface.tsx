@@ -51,7 +51,7 @@ export default function ChatInterface() {
     if (!user) return null;
     const { data, error } = await supabase
       .from('vitals')
-      .select('*')
+      .select('heart_rate, systolic_bp, diastolic_bp, weight, created_at')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -80,15 +80,37 @@ export default function ChatInterface() {
 
     try {
       const latestVitals = await fetchLatestVitals();
+      
+      // Filter out unrealistic vitals (e.g., diastolic > 200 is likely an error)
+      let cleanVitals = undefined;
+      if (latestVitals) {
+        const isClean = (
+           (!latestVitals.systolic_bp || latestVitals.systolic_bp < 300) &&
+           (!latestVitals.diastolic_bp || latestVitals.diastolic_bp < 200) &&
+           (!latestVitals.heart_rate || latestVitals.heart_rate < 300)
+        );
+        
+        if (isClean) {
+            console.log("✅ Vitals are clean:", latestVitals);
+            cleanVitals = {
+                heart_rate: latestVitals.heart_rate,
+                systolic_bp: latestVitals.systolic_bp,
+                diastolic_bp: latestVitals.diastolic_bp,
+                weight: latestVitals.weight
+            };
+        } else {
+            console.warn("⚠️ Skipping unrealistic vitals for AI context:", latestVitals);
+        }
+      } else {
+         console.log("ℹ️ No vitals found.");
+      }
+
+      console.log("SENDING TO AI - Vitals Context:", cleanVitals);
+
       const response = await sendMessage(userMessage.text, {
         role,
         userName: user?.email?.split('@')[0],
-        latestVitals: latestVitals ? {
-            heart_rate: latestVitals.heart_rate,
-            systolic_bp: latestVitals.systolic_bp,
-            diastolic_bp: latestVitals.diastolic_bp,
-            weight: latestVitals.weight
-        } : undefined
+        latestVitals: cleanVitals
       });
       setMessages((prev) => [...prev, response]);
     } catch (error) {

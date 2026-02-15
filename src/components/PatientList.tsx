@@ -16,13 +16,13 @@ export default function PatientList() {
     const fetchPatients = async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, full_name, username')
         .eq('role', 'patient');
 
       if (error) {
         console.error('Error fetching patients:', error);
       } else {
-        setPatients(data || []);
+        setPatients((data as unknown as Profile[]) || []);
       }
       setLoading(false);
     };

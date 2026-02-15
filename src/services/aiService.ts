@@ -1,5 +1,5 @@
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 export interface DiagnosisResponse {
   diagnosis: string;
@@ -69,28 +69,66 @@ export const analyzeSymptoms = async (symptoms: string, imageBase64?: string): P
         throw new Error(data.error?.message || `API Error: ${response.status}`);
     }
 
-    const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    let aiResponse = "{}";
     
+    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+      aiResponse = data.candidates[0].content.parts[0].text;
+    } else {
+        const finishReason = data.candidates?.[0]?.finishReason;
+        const promptFeedback = data.promptFeedback;
+
+        console.error('[Gemini] No diagnosis generated.', { finishReason, promptFeedback });
+
+        if (promptFeedback?.blockReason) {
+            throw new Error(`Diagnosis blocked: ${promptFeedback.blockReason}`);
+        }
+        
+        if (finishReason) {
+            throw new Error(`Diagnosis stopped: ${finishReason}`);
+        }
+        
+        throw new Error("AI could not generate a diagnosis. Please try again with more details.");
+    }
+
     // Clean JSON from possible markdown wrappers
     const cleanedJson = aiResponse.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(cleanedJson) as DiagnosisResponse;
 
     return {
-      diagnosis: parsed.diagnosis || "Refined Analysis Complete",
-      recommendations: parsed.recommendations || ["Consult a doctor if symptoms persist."],
+      diagnosis: parsed.diagnosis || "Analysis Complete",
+      recommendations: parsed.recommendations || [],
       severity: parsed.severity || "low"
     };
   } catch (error: any) {
     console.error('[Gemini] Analysis Fetch Error:', error);
-    // Fallback to basic response
+    
+    // Check for rate limit or quota exceeded
+    const isRateLimit = error.message?.includes('429') || 
+                        error.message?.toLowerCase().includes('quota') ||
+                        error.message?.toLowerCase().includes('too many requests');
+
+    if (isRateLimit) {
+      // Fallback to basic response ONLY for rate limits
+      return {
+        diagnosis: "AI Analysis Temporarily Unavailable (Rate Limit)",
+        recommendations: [
+          "We are receiving too many requests.",
+          "Please wait a moment and try again.",
+          "Consult a doctor if symptoms persist."
+        ],
+        severity: 'medium'
+      };
+    }
+
+    // For other errors, return the actual error as the diagnosis
     return {
-      diagnosis: "AI Analysis Temporarily Unavailable",
+      diagnosis: `Analysis Failed: ${error.message || 'Unknown Error'}`,
       recommendations: [
         "Please check your internet connection.",
-        "Seek medical advice if your condition is serious.",
+        "Verify your API Key configuration.",
         "Try again later."
       ],
-      severity: 'medium'
+      severity: 'high' // Mark as high to grab attention
     };
   }
 };
